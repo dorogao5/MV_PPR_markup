@@ -1,0 +1,1 @@
+"""Pig labeler bot package."""

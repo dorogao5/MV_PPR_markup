@@ -1,0 +1,18 @@
+services:
+  pig-labeler-bot:
+    build: .
+    container_name: pig-labeler-bot
+    env_file:
+      - .env
+    environment:
+      DATA_DIR: /app/data
+      STATE_DIR: /app/state
+      AUTO_DOWNLOAD_DATASET: "true"
+    volumes:
+      - pig_data:/app/data
+      - pig_state:/app/state
+    restart: unless-stopped
+
+volumes:
+  pig_data:
+  pig_state:

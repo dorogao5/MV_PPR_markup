@@ -1,0 +1,25 @@
+[project]
+name = "pig-labeler-bot"
+version = "0.1.0"
+description = "Telegram bot for manual labeling of the Multi-view Pig Posture Recognition dataset"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "kaggle>=1.7,<2",
+  "pillow>=11.2,<12",
+  "python-dotenv>=1.1,<2",
+  "python-telegram-bot>=22.5,<23",
+]
+
+[project.scripts]
+pig-labeler-bot = "piglabeler.main:main"
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/piglabeler"]
+
+[tool.uv]
+package = true
