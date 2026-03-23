@@ -4,6 +4,7 @@ import csv
 import logging
 import os
 import subprocess
+import sys
 import zipfile
 from pathlib import Path
 
@@ -29,6 +30,8 @@ def ensure_dataset_ready(settings: Settings) -> None:
     _prepare_kaggle_auth(settings, env)
 
     command = [
+        sys.executable,
+        "-m",
         "kaggle",
         "competitions",
         "download",
@@ -38,15 +41,15 @@ def ensure_dataset_ready(settings: Settings) -> None:
         str(settings.data_dir),
         "--force",
     ]
-    try:
-        subprocess.run(command, check=True, env=env, capture_output=True, text=True)
-    except subprocess.CalledProcessError as exc:
-        stderr = exc.stderr.strip()
+    completed = subprocess.run(command, check=False, env=env, capture_output=True, text=True)
+    if completed.returncode != 0:
+        stdout = completed.stdout.strip()
+        stderr = completed.stderr.strip()
         raise RuntimeError(
             "Failed to download the dataset from Kaggle. "
             "Make sure credentials are correct and the competition rules were accepted in the browser. "
-            f"Kaggle CLI stderr: {stderr}"
-        ) from exc
+            f"returncode={completed.returncode}; stdout={stdout!r}; stderr={stderr!r}"
+        )
 
     _extract_all_archives(settings.data_dir)
     if not _has_usable_dataset(settings.data_dir):
