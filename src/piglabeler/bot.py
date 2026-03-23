@@ -15,6 +15,7 @@ from telegram.ext import (
 )
 
 from piglabeler.constants import (
+    CLASS_BUTTON_RU,
     CLASS_NAMES,
     CLASS_SHORT_RU,
     HELP_TEXT,
@@ -352,32 +353,32 @@ class PigLabelerBot:
             lines.append(f"Камера: {task.pen} / {task.camera_view}")
         if pending_class_id is not None:
             lines.append(
-                f"Выбран класс: {pending_class_id} — {CLASS_NAMES[pending_class_id]} "
-                f"({CLASS_SHORT_RU[pending_class_id]})"
+                f"Выбран класс: {pending_class_id} — {CLASS_SHORT_RU[pending_class_id]} "
+                f"({CLASS_NAMES[pending_class_id]})"
             )
-            lines.append("Подтверди выбор или нажми Cancel.")
+            lines.append("Подтверди выбор или нажми «Отмена».")
         else:
-            lines.append("Сначала нажми класс, потом Confirm.")
+            lines.append("Сначала нажми класс, потом «Подтвердить».")
         return "\n".join(lines)
 
     def _build_label_keyboard(self) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(
             [
                 [
-                    InlineKeyboardButton("0 left", callback_data="pick:0"),
-                    InlineKeyboardButton("1 right", callback_data="pick:1"),
+                    InlineKeyboardButton(CLASS_BUTTON_RU[0], callback_data="pick:0"),
+                    InlineKeyboardButton(CLASS_BUTTON_RU[1], callback_data="pick:1"),
                 ],
                 [
-                    InlineKeyboardButton("2 sitting", callback_data="pick:2"),
-                    InlineKeyboardButton("3 standing", callback_data="pick:3"),
+                    InlineKeyboardButton(CLASS_BUTTON_RU[2], callback_data="pick:2"),
+                    InlineKeyboardButton(CLASS_BUTTON_RU[3], callback_data="pick:3"),
                 ],
-                [InlineKeyboardButton("4 sternal", callback_data="pick:4")],
+                [InlineKeyboardButton(CLASS_BUTTON_RU[4], callback_data="pick:4")],
                 [
-                    InlineKeyboardButton("Skip", callback_data="skip"),
-                    InlineKeyboardButton("Help", callback_data="help"),
-                    InlineKeyboardButton("Stats", callback_data="stats"),
+                    InlineKeyboardButton("Пропустить", callback_data="skip"),
+                    InlineKeyboardButton("Помощь", callback_data="help"),
+                    InlineKeyboardButton("Статистика", callback_data="stats"),
                 ],
-                [InlineKeyboardButton("Undo", callback_data="undo")],
+                [InlineKeyboardButton("Отменить последнюю", callback_data="undo")],
             ]
         )
 
@@ -386,14 +387,14 @@ class PigLabelerBot:
             [
                 [
                     InlineKeyboardButton(
-                        f"Confirm {class_id} — {CLASS_NAMES[class_id]}",
+                        f"Подтвердить: {class_id} — {CLASS_SHORT_RU[class_id]}",
                         callback_data=f"confirm:{class_id}",
                     )
                 ],
-                [InlineKeyboardButton("Cancel", callback_data="cancel")],
+                [InlineKeyboardButton("Отмена", callback_data="cancel")],
                 [
-                    InlineKeyboardButton("Help", callback_data="help"),
-                    InlineKeyboardButton("Stats", callback_data="stats"),
+                    InlineKeyboardButton("Помощь", callback_data="help"),
+                    InlineKeyboardButton("Статистика", callback_data="stats"),
                 ],
             ]
         )
