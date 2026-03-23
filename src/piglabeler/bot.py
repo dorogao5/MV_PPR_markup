@@ -351,6 +351,18 @@ class PigLabelerBot:
         ]
         if task.camera_view:
             lines.append(f"Камера: {task.pen} / {task.camera_view}")
+        prediction = self.catalog.prediction_for(task.row_id)
+        if prediction is not None:
+            lines.append(
+                "Автопредсказание: "
+                f"{prediction.predicted_class_id} — "
+                f"{CLASS_SHORT_RU[prediction.predicted_class_id]} "
+                f"({CLASS_NAMES[prediction.predicted_class_id]})"
+            )
+            lines.append(
+                f"Источник подсказки: {prediction.model_name}, "
+                f"уверенность {prediction.confidence * 100:.1f}%"
+            )
         if pending_class_id is not None:
             lines.append(
                 f"Выбран класс: {pending_class_id} — {CLASS_SHORT_RU[pending_class_id]} "

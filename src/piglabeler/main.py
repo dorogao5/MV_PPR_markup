@@ -7,6 +7,7 @@ from piglabeler.config import Settings
 from piglabeler.dataset import DatasetCatalog
 from piglabeler.download import ensure_dataset_ready
 from piglabeler.help_assets import HelpAssetBuilder
+from piglabeler.predictions import PredictionQueue, resolve_prediction_queue_path
 from piglabeler.rendering import TaskRenderer
 from piglabeler.store import AnnotationStore
 
@@ -17,11 +18,23 @@ def main() -> None:
 
     logging.getLogger(__name__).info("Starting pig labeler bot")
     dataset_dir = ensure_dataset_ready(settings)
+    prediction_queue_path = resolve_prediction_queue_path(
+        explicit_path=settings.prediction_queue_path,
+        data_dir=dataset_dir,
+    )
+    prediction_queue = (
+        PredictionQueue.load(prediction_queue_path)
+        if prediction_queue_path is not None
+        else None
+    )
+    if prediction_queue_path is not None:
+        logging.getLogger(__name__).info("Using prediction queue from %s", prediction_queue_path)
 
     catalog = DatasetCatalog.discover(
         dataset_dir,
         annotate_sources=settings.annotate_sources,
         include_labeled_sources=settings.include_labeled_sources,
+        prediction_queue=prediction_queue,
     )
     if not catalog.annotatable_row_ids:
         logging.getLogger(__name__).warning(

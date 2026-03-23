@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from piglabeler.constants import REQUIRED_DATA_COLUMNS
+from piglabeler.predictions import PredictionHint, PredictionQueue
 
 LOGGER = logging.getLogger(__name__)
 
@@ -63,11 +64,13 @@ class DatasetCatalog:
         tasks_by_image: dict[tuple[str, str], list[PigTask]],
         sources: dict[str, SourceSummary],
         annotatable_row_ids: list[str],
+        prediction_hints: dict[str, PredictionHint],
     ) -> None:
         self.tasks_by_row_id = tasks_by_row_id
         self.tasks_by_image = tasks_by_image
         self.sources = sources
         self.annotatable_row_ids = annotatable_row_ids
+        self.prediction_hints = prediction_hints
 
     @classmethod
     def discover(
@@ -76,6 +79,7 @@ class DatasetCatalog:
         *,
         annotate_sources: tuple[str, ...] | None,
         include_labeled_sources: bool,
+        prediction_queue: PredictionQueue | None = None,
     ) -> "DatasetCatalog":
         tasks_by_row_id: dict[str, PigTask] = {}
         tasks_by_image: dict[tuple[str, str], list[PigTask]] = defaultdict(list)
@@ -170,6 +174,15 @@ class DatasetCatalog:
                 tasks_by_row_id[row_id].row_id,
             )
         )
+        prediction_hints = cls._collect_prediction_hints(
+            tasks_by_row_id=tasks_by_row_id,
+            prediction_queue=prediction_queue,
+        )
+        annotatable_row_ids = cls._apply_prediction_order(
+            annotatable_row_ids=annotatable_row_ids,
+            tasks_by_row_id=tasks_by_row_id,
+            prediction_queue=prediction_queue,
+        )
         if not annotatable_row_ids:
             LOGGER.warning("No annotatable sources were discovered in %s", data_dir)
 
@@ -178,6 +191,7 @@ class DatasetCatalog:
             tasks_by_image=dict(tasks_by_image),
             sources=sources,
             annotatable_row_ids=annotatable_row_ids,
+            prediction_hints=prediction_hints,
         )
 
     def get_task(self, row_id: str) -> PigTask:
@@ -185,6 +199,9 @@ class DatasetCatalog:
 
     def get_image_tasks(self, source_name: str, image_id: str) -> list[PigTask]:
         return list(self.tasks_by_image[(source_name, image_id)])
+
+    def prediction_for(self, row_id: str) -> PredictionHint | None:
+        return self.prediction_hints.get(row_id)
 
     def iter_annotatable_tasks(self) -> list[PigTask]:
         return [self.tasks_by_row_id[row_id] for row_id in self.annotatable_row_ids]
@@ -204,3 +221,61 @@ class DatasetCatalog:
             for task in self.tasks_by_row_id.values()
             if task.class_id is not None and self.sources[task.source_name].has_labels
         ]
+
+    @staticmethod
+    def _collect_prediction_hints(
+        *,
+        tasks_by_row_id: dict[str, PigTask],
+        prediction_queue: PredictionQueue | None,
+    ) -> dict[str, PredictionHint]:
+        if prediction_queue is None:
+            return {}
+        return {
+            row_id: hint
+            for row_id, hint in prediction_queue.predictions_by_row_id.items()
+            if row_id in tasks_by_row_id
+        }
+
+    @staticmethod
+    def _apply_prediction_order(
+        *,
+        annotatable_row_ids: list[str],
+        tasks_by_row_id: dict[str, PigTask],
+        prediction_queue: PredictionQueue | None,
+    ) -> list[str]:
+        if prediction_queue is None:
+            return annotatable_row_ids
+
+        annotatable_set = set(annotatable_row_ids)
+        prioritized: list[str] = []
+        seen: set[str] = set()
+        missing_row_ids = 0
+        non_annotatable_row_ids = 0
+
+        for row_id in prediction_queue.ordered_row_ids:
+            if row_id not in tasks_by_row_id:
+                missing_row_ids += 1
+                continue
+            if row_id not in annotatable_set:
+                non_annotatable_row_ids += 1
+                continue
+            prioritized.append(row_id)
+            seen.add(row_id)
+
+        if missing_row_ids:
+            LOGGER.warning(
+                "Prediction queue contains %s row_ids that are not present in the dataset.",
+                missing_row_ids,
+            )
+        if non_annotatable_row_ids:
+            LOGGER.info(
+                "Prediction queue contains %s row_ids outside annotatable sources.",
+                non_annotatable_row_ids,
+            )
+
+        if not prioritized:
+            LOGGER.warning("Prediction queue was loaded, but no annotatable rows matched it.")
+            return annotatable_row_ids
+
+        remainder = [row_id for row_id in annotatable_row_ids if row_id not in seen]
+        return prioritized + remainder

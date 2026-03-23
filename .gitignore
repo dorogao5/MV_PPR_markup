@@ -36,3 +36,4 @@ pig_posture_classes.txt
 data_description.md
 
 *.log
+probs/*.npy

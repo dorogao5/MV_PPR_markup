@@ -26,6 +26,7 @@ class Settings:
     telegram_bot_token: str
     data_dir: Path
     state_dir: Path
+    prediction_queue_path: Path | None
     kaggle_competition: str
     auto_download_dataset: bool
     annotate_sources: tuple[str, ...] | None
@@ -44,6 +45,11 @@ class Settings:
             telegram_bot_token=token,
             data_dir=Path(os.getenv("DATA_DIR", ".")).expanduser().resolve(),
             state_dir=Path(os.getenv("STATE_DIR", ".state")).expanduser().resolve(),
+            prediction_queue_path=(
+                Path(os.getenv("PREDICTION_QUEUE_PATH", "")).expanduser().resolve()
+                if os.getenv("PREDICTION_QUEUE_PATH")
+                else None
+            ),
             kaggle_competition=os.getenv(
                 "KAGGLE_COMPETITION",
                 "multi-view-pig-posture-recognition",
