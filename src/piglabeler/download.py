@@ -14,10 +14,11 @@ from piglabeler.config import Settings
 LOGGER = logging.getLogger(__name__)
 
 
-def ensure_dataset_ready(settings: Settings) -> None:
-    if _has_usable_dataset(settings.data_dir):
-        LOGGER.info("Dataset is already present in %s", settings.data_dir)
-        return
+def ensure_dataset_ready(settings: Settings) -> Path:
+    dataset_root = _find_dataset_root(settings.data_dir)
+    if dataset_root is not None:
+        LOGGER.info("Dataset is already present in %s", dataset_root)
+        return dataset_root
 
     if not settings.auto_download_dataset:
         raise RuntimeError(
@@ -53,10 +54,13 @@ def ensure_dataset_ready(settings: Settings) -> None:
         )
 
     _extract_all_archives(settings.data_dir)
-    if not _has_usable_dataset(settings.data_dir):
+    dataset_root = _find_dataset_root(settings.data_dir)
+    if dataset_root is None:
         raise RuntimeError(
             f"Kaggle download finished, but expected CSV/image files were not found in {settings.data_dir}."
         )
+    LOGGER.info("Using dataset root %s", dataset_root)
+    return dataset_root
 
 
 def _prepare_kaggle_auth(settings: Settings, env: dict[str, str]) -> None:
@@ -86,8 +90,9 @@ def _extract_all_archives(data_dir: Path) -> None:
             zf.extractall(data_dir)
 
 
-def _has_usable_dataset(data_dir: Path) -> bool:
-    for csv_path in sorted(data_dir.glob("*.csv")):
+def _find_dataset_root(data_dir: Path) -> Path | None:
+    candidates: list[Path] = []
+    for csv_path in sorted(data_dir.rglob("*.csv")):
         if csv_path.stem == "sample_submission":
             continue
         with csv_path.open("r", newline="", encoding="utf-8") as handle:
@@ -95,7 +100,12 @@ def _has_usable_dataset(data_dir: Path) -> bool:
             if not reader.fieldnames:
                 continue
             if all(column in reader.fieldnames for column in REQUIRED_DATA_COLUMNS):
-                image_dir = data_dir / f"{csv_path.stem}_images"
+                image_dir = csv_path.parent / f"{csv_path.stem}_images"
                 if image_dir.exists():
-                    return True
-    return False
+                    candidates.append(csv_path.parent)
+
+    if not candidates:
+        return None
+
+    unique_candidates = sorted(set(candidates), key=lambda path: (len(path.parts), str(path)))
+    return unique_candidates[0]

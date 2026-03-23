@@ -16,10 +16,10 @@ def main() -> None:
     settings.configure_logging()
 
     logging.getLogger(__name__).info("Starting pig labeler bot")
-    ensure_dataset_ready(settings)
+    dataset_dir = ensure_dataset_ready(settings)
 
     catalog = DatasetCatalog.discover(
-        settings.data_dir,
+        dataset_dir,
         annotate_sources=settings.annotate_sources,
         include_labeled_sources=settings.include_labeled_sources,
     )
