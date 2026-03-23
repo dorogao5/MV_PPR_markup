@@ -3,8 +3,8 @@ from __future__ import annotations
 import csv
 import logging
 import os
+import shutil
 import subprocess
-import sys
 import zipfile
 from pathlib import Path
 
@@ -28,11 +28,12 @@ def ensure_dataset_ready(settings: Settings) -> None:
     LOGGER.info("Dataset not found. Downloading Kaggle competition files into %s", settings.data_dir)
     env = os.environ.copy()
     _prepare_kaggle_auth(settings, env)
+    kaggle_executable = shutil.which("kaggle", path=env.get("PATH"))
+    if not kaggle_executable:
+        raise RuntimeError("Kaggle CLI executable was not found in PATH inside the container.")
 
     command = [
-        sys.executable,
-        "-m",
-        "kaggle",
+        kaggle_executable,
         "competitions",
         "download",
         "-c",
