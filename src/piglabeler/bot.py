@@ -34,6 +34,7 @@ LOGGER = logging.getLogger(__name__)
 class SessionState:
     current_row_id: str | None = None
     pending_class_id: int | None = None
+    current_message_ids: list[int] = field(default_factory=list)
     skipped_row_ids: deque[str] = field(default_factory=lambda: deque(maxlen=MAX_RECENT_SKIPS))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -176,7 +177,11 @@ class PigLabelerBot:
             session.current_row_id = None
             session.pending_class_id = None
             await query.answer("Разметка сохранена.")
-            await self._delete_message_safely(query)
+            await self._delete_task_messages(
+                chat_id=query.message.chat.id,
+                session=session,
+                context=context,
+            )
             await self._send_task_for_user(
                 chat_id=query.message.chat.id,
                 user_id=user.id,
@@ -192,7 +197,11 @@ class PigLabelerBot:
             session.current_row_id = None
             session.pending_class_id = None
             await query.answer("Задача пропущена.")
-            await self._delete_message_safely(query)
+            await self._delete_task_messages(
+                chat_id=query.message.chat.id,
+                session=session,
+                context=context,
+            )
             await self._send_task_for_user(
                 chat_id=query.message.chat.id,
                 user_id=user.id,
@@ -238,6 +247,7 @@ class PigLabelerBot:
         context: ContextTypes.DEFAULT_TYPE,
     ) -> None:
         session = self._get_session(user_id)
+        await self._delete_task_messages(chat_id=chat_id, session=session, context=context)
         task = self._pick_next_task(session, user_id)
         if task is None:
             await context.bot.send_message(
@@ -248,8 +258,14 @@ class PigLabelerBot:
 
         siblings = self.catalog.get_image_tasks(task.source_name, task.image_id)
         image_path = self.renderer.render_task(task, siblings)
+        with task.image_path.open("rb") as original_handle:
+            original_message = await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=original_handle,
+                caption=self._build_original_caption(task),
+            )
         with image_path.open("rb") as handle:
-            await context.bot.send_photo(
+            task_message = await context.bot.send_photo(
                 chat_id=chat_id,
                 photo=handle,
                 caption=self._build_task_caption(task, pending_class_id=session.pending_class_id),
@@ -259,6 +275,8 @@ class PigLabelerBot:
                     else self._build_label_keyboard()
                 ),
             )
+        session.current_message_ids = [original_message.message_id, task_message.message_id]
+        session.touch()
 
     async def _send_help(self, chat_id: int, context: ContextTypes.DEFAULT_TYPE) -> None:
         help_image = self.help_builder.build_examples(self.catalog)
@@ -373,6 +391,13 @@ class PigLabelerBot:
             lines.append("Сначала нажми класс, потом «Подтвердить».")
         return "\n".join(lines)
 
+    def _build_original_caption(self, task: PigTask) -> str:
+        return (
+            "Оригинальный кадр без bbox.\n"
+            f"Кадр: {task.image_id}\n"
+            "Открой фото отдельно, если нужно приблизить детали."
+        )
+
     def _build_label_keyboard(self) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(
             [
@@ -444,11 +469,22 @@ class PigLabelerBot:
             )
         return "\n".join(lines)
 
-    async def _delete_message_safely(self, query) -> None:
-        try:
-            await query.message.delete()
-        except Exception:  # pragma: no cover - Telegram errors are non-fatal here
-            LOGGER.debug("Failed to delete previous task message", exc_info=True)
+    async def _delete_task_messages(
+        self,
+        *,
+        chat_id: int,
+        session: SessionState,
+        context: ContextTypes.DEFAULT_TYPE,
+    ) -> None:
+        if not session.current_message_ids:
+            return
+
+        for message_id in session.current_message_ids:
+            try:
+                await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+            except Exception:  # pragma: no cover - Telegram errors are non-fatal here
+                LOGGER.debug("Failed to delete task message %s", message_id, exc_info=True)
+        session.current_message_ids.clear()
 
     def _user_name(self, user) -> str:
         if user.username:
