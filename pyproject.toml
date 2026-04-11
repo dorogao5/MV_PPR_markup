@@ -13,6 +13,9 @@ dependencies = [
 
 [project.scripts]
 pig-labeler-bot = "piglabeler.main:main"
+pig-labeler-build-submission = "piglabeler.build_submission:main"
+pig-labeler-patch-submission = "piglabeler.patch_submission:main"
+pig-labeler-prepare-disagreement-queue = "piglabeler.prepare_disagreement_queue:main"
 
 [build-system]
 requires = ["hatchling>=1.27"]

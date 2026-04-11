@@ -156,6 +156,80 @@ PYTHONPATH=src .venv/bin/python -m piglabeler.prepare_queue \
 
 Если нужен конкретный путь, можно явно задать `PREDICTION_QUEUE_PATH`.
 
+## Приоритетная очередь по disagreement
+
+Если нужно размечать не просто low-confidence, а самые конфликтные строки, можно собрать полную очередь в штатном формате бота:
+
+```bash
+uv run python -m piglabeler.prepare_disagreement_queue \
+  --csv server_dump/test.csv \
+  --old-submission submissions/old/T1_smart_plus_new_all3_to34.csv \
+  --old-submission submissions/old/T1_smart_plus_new_all3_no03_13_to4.csv \
+  --output predictions/prediction_queue.csv
+```
+
+Что делает команда:
+
+- считает базовое автопредсказание по среднему `effnet/maxvit/swin`;
+- поднимает наверх строки, где старые сильные сабмиты не согласны между собой;
+- затем поднимает случаи, где текущие модели не согласны друг с другом;
+- отдельно усиливает пары классов `0/1` и `3/4`;
+- записывает полноценный `prediction_queue.csv`, который бот читает напрямую по `priority_rank`.
+
+Если `submissions/old/*.csv` уже лежат в репозитории, `--old-submission` можно не передавать: скрипт подхватит их автоматически.
+
+## Локальная сборка финального submission
+
+Когда ручная разметка уже выгружена с сервера, можно собрать итоговый сабмит локально:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m piglabeler.build_submission \
+  --csv test.csv \
+  --probs-dir probs \
+  --manual-labels current_annotations.csv \
+  --output submissions/submission_blend_manual.csv
+```
+
+Что делает команда:
+
+- усредняет вероятности из `probs/*.npy`;
+- берет `argmax` как базовое автопредсказание;
+- накладывает сверху ручные метки по `row_id`;
+- пишет финальный Kaggle-файл `row_id,class_id`.
+
+Если хочешь использовать уже готовый экспорт из бота, вместо `current_annotations.csv` можно передать `test_submission.csv` или `test_manual_labels.csv`.
+
+Если нужен взвешенный бленд, добавь:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m piglabeler.build_submission \
+  --csv test.csv \
+  --probs-dir probs \
+  --strategy weighted-mean \
+  --weight effnet_tta=2 \
+  --weight maxvit_tta=1 \
+  --weight swin_tta=1 \
+  --manual-labels current_annotations.csv \
+  --output submissions/submission_weighted_manual.csv
+```
+
+## Patch готового submission ручными метками
+
+Если лучший baseline уже есть в виде готового `submission.csv`, можно просто наложить ручные метки без пересборки из `probs`:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m piglabeler.patch_submission \
+  --base-submission submissions/old/best_old.csv \
+  --manual-labels server_dump/test_submission.csv \
+  --output submissions/best_old_manual.csv
+```
+
+Команда:
+
+- читает базовый `row_id,class_id`;
+- заменяет совпавшие `row_id` на ручные метки;
+- пишет новый patched submission.
+
 ## Замечания
 
 - Для различения `Lateral_lying_left` и `Lateral_lying_right` бот показывает реальные train-примеры в `/help`.
