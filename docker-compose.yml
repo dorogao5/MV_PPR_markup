@@ -7,6 +7,7 @@ services:
     environment:
       DATA_DIR: /app/data
       STATE_DIR: /app/state
+      PREDICTION_QUEUE_PATH: /app/predictions/prediction_queue.csv
       AUTO_DOWNLOAD_DATASET: "true"
     volumes:
       - pig_data:/app/data
